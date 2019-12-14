@@ -13,12 +13,16 @@ def current_timestamp():
 class CryptoComApi:
     API_BASE = "https://api.crypto.com"
 
-    key = ""
-    secret = ""
+    __key = ""
+    __secret = ""
+
+    def __init__(self, key, secret):
+        self.__key = key
+        self.__secret = secret
 
     def _sign(self, time):
-        param = ("api_key" + str(self.key) + "time" + str(time) + str(self.secret)).encode()
-        h = hashlib.sha256(("api_key" + str(self.key) + "time" + str(time) + str(self.secret)).encode()).hexdigest()
+        param = ("api_key" + str(self.__key) + "time" + str(time) + str(self.__secret)).encode()
+        h = hashlib.sha256(("api_key" + str(self.__key) + "time" + str(time) + str(self.__secret)).encode()).hexdigest()
         return h
 
     def _request(self, path, param=None, private=False, method='get'):
@@ -56,7 +60,7 @@ class CryptoComApi:
     def _post(self, path, params=None):
         if params is None:
             params = {}
-        params['api_key'] = self.key
+        params['api_key'] = self.__key
         params['time'] = current_timestamp()
         params['sign'] = self._sign(params['time'])
 
