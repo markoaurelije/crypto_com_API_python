@@ -24,8 +24,7 @@ class CryptoComApi:
         to_sign = ""
         for param in sorted(params.keys()):
             to_sign += param + str(params[param])
-        # param = ("api_key" + str(self.__key) + "time" + str(time) + str(self.__secret)).encode()
-        # h = hashlib.sha256(("api_key" + str(self.__key) + "time" + str(time) + str(self.__secret)).encode()).hexdigest()
+        to_sign += str(self.__secret)
         h = hashlib.sha256(to_sign.encode()).hexdigest()
         return h
 
