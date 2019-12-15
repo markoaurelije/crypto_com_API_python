@@ -20,9 +20,13 @@ class CryptoComApi:
         self.__key = key
         self.__secret = secret
 
-    def _sign(self, time):
-        param = ("api_key" + str(self.__key) + "time" + str(time) + str(self.__secret)).encode()
-        h = hashlib.sha256(("api_key" + str(self.__key) + "time" + str(time) + str(self.__secret)).encode()).hexdigest()
+    def _sign(self, params):
+        to_sign = ""
+        for param in sorted(params.keys()):
+            to_sign += param + str(params[param])
+        # param = ("api_key" + str(self.__key) + "time" + str(time) + str(self.__secret)).encode()
+        # h = hashlib.sha256(("api_key" + str(self.__key) + "time" + str(time) + str(self.__secret)).encode()).hexdigest()
+        h = hashlib.sha256(to_sign.encode()).hexdigest()
         return h
 
     def _request(self, path, param=None, private=False, method='get'):
@@ -62,7 +66,7 @@ class CryptoComApi:
             params = {}
         params['api_key'] = self.__key
         params['time'] = current_timestamp()
-        params['sign'] = self._sign(params['time'])
+        params['sign'] = self._sign(params)
 
         return self._request(path, params, private=True, method='post')
 
