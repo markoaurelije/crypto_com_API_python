@@ -75,8 +75,8 @@ class CryptoComApi:
         return self._request('/v1/symbols')
 
     # Get tickers in all available markets
-    def tickers(self):
-        return self._request('/v1/ticker')
+    def ticker(self):
+        return self._request('/v1/tickers')
 
     # Get ticker for a particular market
     def tickers(self, symbol):
