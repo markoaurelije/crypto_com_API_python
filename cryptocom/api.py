@@ -1,20 +1,24 @@
 import logging
 import hashlib
 import requests
+from time import sleep
+from datetime import datetime
 
 logger = logging.getLogger('cryptocom_api')
 
 
 def current_timestamp():
-    from datetime import datetime
     return int(datetime.timestamp(datetime.now()) * 1000)
 
 
 class CryptoComApi:
     API_BASE = "https://api.crypto.com"
+    RATE_LIMIT_PER_SECOND = 10
 
     __key = ""
     __secret = ""
+
+    __last_api_call = 0
 
     def __init__(self, key, secret):
         self.__key = key
@@ -29,6 +33,11 @@ class CryptoComApi:
         return h
 
     def _request(self, path, param=None, private=False, method='get'):
+        time_from_last_api_call = current_timestamp() - self.__last_api_call
+        if current_timestamp() - self.__last_api_call < 100:
+            sleep(time_from_last_api_call/1000)
+
+        self.__last_api_call = current_timestamp()
         if not private:
             r = requests.get(self.API_BASE + path, params=param)
             response = r.json()
