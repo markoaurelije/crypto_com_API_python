@@ -1,12 +1,15 @@
 import logging
 import hashlib
 import requests
+from time import sleep
+from datetime import datetime
 
 logger = logging.getLogger('cryptocom_api')
 
+RATE_LIMIT_PER_SECOND = 10
+
 
 def current_timestamp():
-    from datetime import datetime
     return int(datetime.timestamp(datetime.now()) * 1000)
 
 
@@ -15,6 +18,8 @@ class CryptoComApi:
 
     __key = ""
     __secret = ""
+
+    __last_api_call = 0
 
     def __init__(self, key, secret):
         self.__key = key
@@ -28,19 +33,25 @@ class CryptoComApi:
         h = hashlib.sha256(to_sign.encode()).hexdigest()
         return h
 
-    def _request(self, path, param=None, private=False, method='get'):
-        if not private:
-            r = requests.get(self.API_BASE + path, params=param)
-            response = r.json()
-            if response.get('code') != '0':
-                # error occurred
-                logger.warning(f'Error code: {response.get("code")}')
-                logger.warning(f'Error msg: {response.get("msg")}')
-                return response
-            return response.get('data')
+    def _request(self, path, param=None, method='get'):
+        ms_from_last_api_call = current_timestamp() - self.__last_api_call
+        if ms_from_last_api_call < 1000/RATE_LIMIT_PER_SECOND:
+            delay_for_ms = 1000/RATE_LIMIT_PER_SECOND - max(1000/RATE_LIMIT_PER_SECOND, ms_from_last_api_call)
+            logger.debug(f"API call rate limiter activated, delaying for {delay_for_ms}ms")
+            sleep(delay_for_ms * 1000)
+
+        self.__last_api_call = current_timestamp()
 
         if method == 'post':
             r = requests.post(self.API_BASE + path, data=param)
+        elif method == 'delete':
+            r = requests.delete(self.API_BASE + path, data=param)
+        elif method == 'get':
+            r = requests.get(self.API_BASE + path, params=param)
+        else:
+            return {}
+
+        try:
             response = r.json()
             if response.get('code') != '0':
                 # error occurred
@@ -48,17 +59,9 @@ class CryptoComApi:
                 logger.warning(f'Error msg: {response.get("msg")}')
                 return response
             return response.get('data')
-
-        if method == 'delete':
-            r = requests.delete(self.API_BASE + path, data=param)
-            response = r.json()
-            if response.get('code') != '0':
-                # error occurred
-                logger.warning(f'Error code: {response.get("code")}')
-                logger.warning(f'Error msg: {response.get("msg")}')
-            return response
-
-        return {}
+        except Exception as e:
+            logger.error(f"{e}\r\nResponse text: {r.text}")
+            return {}
 
     def _post(self, path, params=None):
         if params is None:
@@ -67,7 +70,7 @@ class CryptoComApi:
         params['time'] = current_timestamp()
         params['sign'] = self._sign(params)
 
-        return self._request(path, params, private=True, method='post')
+        return self._request(path, params, method='post')
 
     ### Market Group ###
     # List all available market symbols
