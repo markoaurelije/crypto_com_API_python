@@ -57,7 +57,7 @@ class CryptoComApi:
                 # error occurred
                 logger.warning(f'Error code: {response.get("code")}')
                 logger.warning(f'Error msg: {response.get("msg")}')
-                return response
+                return {}
             return response.get('data')
         except Exception as e:
             logger.error(f"{e}\r\nResponse text: {r.text}")
