@@ -36,9 +36,9 @@ class CryptoComApi:
     def _request(self, path, param=None, method='get'):
         ms_from_last_api_call = current_timestamp() - self.__last_api_call
         if ms_from_last_api_call < 1000/RATE_LIMIT_PER_SECOND:
-            delay_for_ms = 1000/RATE_LIMIT_PER_SECOND - max(1000/RATE_LIMIT_PER_SECOND, ms_from_last_api_call)
+            delay_for_ms = 1000/RATE_LIMIT_PER_SECOND - min(1000/RATE_LIMIT_PER_SECOND, ms_from_last_api_call)
             logger.debug(f"API call rate limiter activated, delaying for {delay_for_ms}ms")
-            sleep(delay_for_ms * 1000)
+            sleep(delay_for_ms / 1000)
 
         self.__last_api_call = current_timestamp()
 
