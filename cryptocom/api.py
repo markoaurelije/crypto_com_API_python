@@ -78,11 +78,11 @@ class CryptoComApi:
         return self._request('/v1/symbols')
 
     # Get tickers in all available markets
-    def ticker(self):
-        return self._request('/v1/tickers')
+    def tickers(self):
+        return self._request('/v1/ticker')
 
     # Get ticker for a particular market
-    def tickers(self, symbol):
+    def ticker(self, symbol):
         return self._request('/v1/ticker', param={'symbol': symbol})
 
     # Get k-line data over a specified period
