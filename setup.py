@@ -10,7 +10,7 @@ README = (HERE / "README.md").read_text()
 # This call to setup() does all the work
 setup(
     name="cryptocom-python",
-    version="0.1.5",
+    version="0.1.6",
     description="Python API wrapper for crypto.com/exchange",
     long_description=README,
     long_description_content_type="text/markdown",

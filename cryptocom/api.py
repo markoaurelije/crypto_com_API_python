@@ -101,19 +101,45 @@ class CryptoComApi:
     def order_book(self, symbol, _type='step0'):
         return self._request('/v1/depth', param={'symbol': symbol, 'type': _type})
 
-    ### User Group ###
-    # List all account balance of user
+    #####################################
+    # User Group #
     def balance(self):
+        """
+        List all account balance of user
+
+        @return: {
+                  "total_asset": 432323.23, // user total assets (estimated in BTC)
+                  "coin_list": [
+                    {
+                      "normal": 32323.233, // usable balance
+                      "locked": 32323.233, // locked balance, e.g. locked in an active, non-executed order
+                      "btcValuatin": 112.33, // value equal to BTC
+                      "coin": "btc" // asset type
+                    },
+                    {
+                      "normal": 32323.233,
+                      "locked": 32323.233,
+                      "btcValuatin": 112.33,
+                      "coin": "ltc"
+                    },
+                    {
+                      "normal": 32323.233,
+                      "locked": 32323.233,
+                      "btcValuatin": 112.33,
+                      "coin": "bch"
+                    }
+                  ]
+                }
+        """
         return self._post('/v1/account')
 
-    # Create an order
-    def create_order(self, symbol, side, _type, volume, price, fee_coin):
+    def create_order(self, symbol, side, _type, volume, price=None, fee_coin=None):
         """
         creates a buy or sell order on exchange
 
-        @param fee_coin: whether to use the platform currency to pay the handling fee, 0: no, 1: yes
-        @param price: Unit price. If type=2 then no need for this parameter.
-        @param symbol: Market symbol "ethbtc"
+        @param fee_coin: (optional) whether to use the platform currency to pay the handling fee, 0: no, 1: yes
+        @param price: (optional) Unit price. If type=2 then no need for this parameter.
+        @param symbol: Market symbol ex. "ethbtc"
         @param side: BUY, SELL
 
         @type _type: int
@@ -121,25 +147,124 @@ class CryptoComApi:
 
         @param volume: type=1: represents the quantity of sales and purchases; \
                        type=2: buy means the total price, Selling represents the total number.
+
+        @return: { "order_id": 34343 }
         """
-        params = {'symbol': symbol, 'side': side, 'type': _type}
-        if price:
-            params['price'] = price
+        params = {'symbol': symbol, 'side': side, 'type': _type, 'volume': volume}
+
         if fee_coin:
             params['fee_is_user_exchange_coin'] = fee_coin
+        if price:
+            params['price'] = price
+
         return self._post('/v1/order', params)
 
-    # List all open orders in a particular market (current pending orders)
+    def show_order(self, symbol, order_id):
+        """
+        Get order detail
+
+        @param symbol: Market symbol ex. "ethbtc"
+        @param order_id: Order ID
+        @return:
+        {
+            "trade_list": [
+                {
+                    "volume": "0.00100000",
+                    "feeCoin": "USDT",
+                    "price": "9744.25000000",
+                    "fee": "0.00000000",
+                    "ctime": 1571971998000,
+                    "deal_price": "9.74425000",
+                    "id": 6224,
+                    "type": "SELL"
+                }
+            ],
+            "order_info": {
+                "id": 8140,
+                "side": "SELL",
+                "total_price": "8.00000000",
+                "fee": 0E-8,
+                "created_at": 1571971998681,
+                "deal_price": 9.7442500000000000,
+                "avg_price": "9744.25000000",
+                "countCoin": "USDT",
+                "source": 3,
+                "type": 1,
+                "side_msg": "SELL",
+                "volume": "0.00100000",
+                "price": "8000.00000000",
+                "source_msg": "API",
+                "status_msg": "Completely Filled",
+                "deal_volume": "0.00100000",
+                "fee_coin": "USDT",
+                "remain_volume": "0.00000000",
+                "baseCoin": "BTC",
+                "tradeList": [
+                    {
+                        "volume": "0.00100000",
+                        "feeCoin": "USDT",
+                        "price": "9744.25000000",
+                        "fee": "0.00000000",
+                        "ctime": 1571971998000,
+                        "deal_price": "9.74425000",
+                        "id": 6224,
+                        "type": "SELL"
+                    }
+                ],
+                "status": 2
+            }
+        }
+        """
+        params = {'symbol': symbol, 'order_id': order_id}
+        return self._post('/v1/order', params)
+
+    def cancel_order(self, symbol, order_id):
+        """
+        Cancel an order
+
+        @param symbol: Market symbol ex. "ethbtc"
+        @param order_id: OrderID
+        @return: (null)
+        """
+        params = {'symbol': symbol, 'order_id': order_id}
+        return self._post('/v1/orders/cancel', params)
+
+    def cancel_all_orders(self, symbol):
+        """
+        Cancel all orders in a particular market
+
+        @param symbol: Market symbol ex. "ethbtc"
+        @return: (null)
+        """
+        params = {'symbol': symbol}
+        return self._post('/v1/cancelAllOrders', params)
+
     def open_orders(self, symbol, page_size=None, page_number=None):
+        """
+        List all open orders in a particular market
+
+        @param symbol: Market symbol ex. "ethbtc"
+        @param page_size: Page size (optional)
+        @param page_number: Page number (optional)
+        @return:
+        """
         params = {'symbol': symbol}
         if page_size and page_number:
             params['pageSize'] = page_size
             params['page'] = page_number
         return self._post('/v1/openOrders', params)
 
-    # List all orders in a particular market (including executed, pending, cancelled orders)
-    # start, end --> accurate to seconds "yyyy-MM-dd mm:hh:ss"
     def all_orders(self, symbol, page_size=None, page_number=None, start=None, end=None):
+        """
+        List all orders in a particular market (including executed, pending, cancelled orders)
+
+        @param symbol: Market symbol ex. "ethbtc"
+        @param page_size: Page size (optional)
+        @param page_number: Page number (optional)
+        @param start: Start time, accurate to seconds "yyyy-MM-dd mm:hh:ss" (optional)
+        @param end: End time, accurate to seconds "yyyy-MM-dd mm:hh:ss" (optional)
+        @return:
+        """
         params = {'symbol': symbol}
         if page_size and page_number:
             params['pageSize'] = page_size
@@ -150,8 +275,18 @@ class CryptoComApi:
             params['endDate'] = end
         return self._post('/v1/allOrders', params)
 
-    # List all executed orders
-    def all_executed_orders(self, symbol, page_size=None, page_number=None, start=None, end=None):
+    def all_executed_orders(self, symbol, page_size=None, page_number=None, start=None, end=None, sort=None):
+        """
+        List all executed orders
+
+        @param symbol: Market symbol ex. "ethbtc"
+        @param page_size: Page size (optional)
+        @param page_number: Page number (optional)
+        @param start: Start time, accurate to seconds "yyyy-MM-dd mm:hh:ss" (optional)
+        @param end: End time, accurate to seconds "yyyy-MM-dd mm:hh:ss" (optional)
+        @param sort: 1 gives reverse order
+        @return:
+        """
         params = {'symbol': symbol}
         if page_size and page_number:
             params['pageSize'] = page_size
@@ -160,4 +295,6 @@ class CryptoComApi:
             params['startDate'] = start
         if end:
             params['endDate'] = end
+        if sort:
+            params['sort'] = sort
         return self._post('/v1/myTrades', params)
