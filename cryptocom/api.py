@@ -7,6 +7,8 @@ from datetime import datetime
 logger = logging.getLogger('cryptocom_api')
 
 RATE_LIMIT_PER_SECOND = 10
+LIMIT_ORDER = 1
+MARKET_ORDER = 2
 
 
 def current_timestamp():
@@ -158,6 +160,12 @@ class CryptoComApi:
             params['price'] = price
 
         return self._post('/v1/order', params)
+
+    def create_limit_order(self, symbol, side, amount, price, fee_coin=None):
+        return self.create_order(symbol, side, LIMIT_ORDER, amount, price, fee_coin)
+
+    def create_market_order(self, symbol, side, total, fee_coin=None):
+        return self.create_order(symbol, side, MARKET_ORDER, total, None, fee_coin)
 
     def show_order(self, symbol, order_id):
         """
