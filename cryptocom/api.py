@@ -216,7 +216,7 @@ class CryptoComApi:
         }
         """
         params = {'symbol': symbol, 'order_id': order_id}
-        return self._post('/v1/order', params)
+        return self._post('/v1/showOrder', params)
 
     def cancel_order(self, symbol, order_id):
         """
