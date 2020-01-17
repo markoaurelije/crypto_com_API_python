@@ -20,12 +20,15 @@ class CryptoComApi:
 
     __key = ""
     __secret = ""
+    __public_only = True
 
     __last_api_call = 0
 
-    def __init__(self, key, secret):
-        self.__key = key
-        self.__secret = secret
+    def __init__(self, key=None, secret=None):
+        if key and secret:
+            self.__key = key
+            self.__secret = secret
+            self.__public_only = False
 
     def _sign(self, params):
         to_sign = ""
@@ -39,7 +42,7 @@ class CryptoComApi:
         ms_from_last_api_call = current_timestamp() - self.__last_api_call
         if ms_from_last_api_call < 1000/RATE_LIMIT_PER_SECOND:
             delay_for_ms = 1000/RATE_LIMIT_PER_SECOND - min(1000/RATE_LIMIT_PER_SECOND, ms_from_last_api_call)
-            logger.debug(f"API call rate limiter activated, delaying for {delay_for_ms}ms")
+            logger.debug(f"API call '{path}' rate limiter activated, delaying for {delay_for_ms}ms")
             sleep(delay_for_ms / 1000)
 
         self.__last_api_call = current_timestamp()
@@ -66,6 +69,8 @@ class CryptoComApi:
             return {}
 
     def _post(self, path, params=None):
+        if self.__public_only:
+            return {}
         if params is None:
             params = {}
         params['api_key'] = self.__key
