@@ -57,7 +57,12 @@ class CryptoComApi:
             return {}
 
         try:
+            if r.status_code != 200:
+                logger.warning(f"Response {r.status_code} NOK: {r.text}")
+                return {}
+
             response = r.json()
+
             if response.get('code') != '0':
                 # error occurred
                 logger.warning(f'Error code: {response.get("code")}')
