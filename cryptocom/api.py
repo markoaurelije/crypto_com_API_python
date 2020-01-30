@@ -24,6 +24,8 @@ class CryptoComApi:
 
     __last_api_call = 0
 
+    error = None
+
     def __init__(self, key=None, secret=None):
         if key and secret:
             self.__key = key
@@ -47,6 +49,8 @@ class CryptoComApi:
 
         self.__last_api_call = current_timestamp()
 
+        self.error = None
+
         if method == 'post':
             r = requests.post(self.API_BASE + path, data=param)
         elif method == 'delete':
@@ -59,6 +63,11 @@ class CryptoComApi:
         try:
             if r.status_code != 200:
                 logger.warning(f"Response {r.status_code} NOK: {r.text}")
+                self.error = {'http_code': r.status_code}
+                try:
+                    self.error.update(r.json())
+                except:
+                    pass
                 return {}
 
             response = r.json()
@@ -67,10 +76,12 @@ class CryptoComApi:
                 # error occurred
                 logger.warning(f'Error code: {response.get("code")}')
                 logger.warning(f'Error msg: {response.get("msg")}')
+                self.error = response
                 return {}
             return response.get('data')
         except Exception as e:
             logger.error(f"{e}\r\nResponse text: {r.text}")
+            self.error = {'exception': r.text}
             return {}
 
     def _post(self, path, params=None):
