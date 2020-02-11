@@ -278,8 +278,9 @@ class CryptoComApi:
         @return:
         """
         params = {'symbol': symbol}
-        if page_size and page_number:
+        if page_size:
             params['pageSize'] = page_size
+        if page_number:
             params['page'] = page_number
         return self._post('/v1/openOrders', params)
 
@@ -295,8 +296,9 @@ class CryptoComApi:
         @return:
         """
         params = {'symbol': symbol}
-        if page_size and page_number:
+        if page_size:
             params['pageSize'] = page_size
+        if page_number:
             params['page'] = page_number
         if start:
             params['startDate'] = start
@@ -317,8 +319,9 @@ class CryptoComApi:
         @return:
         """
         params = {'symbol': symbol}
-        if page_size and page_number:
+        if page_size:
             params['pageSize'] = page_size
+        if page_number:
             params['page'] = page_number
         if start:
             params['startDate'] = start
