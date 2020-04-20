@@ -61,6 +61,12 @@ class CryptoComApi:
             return {}
 
         try:
+            if r.elapsed:
+                logger.debug(f"{path}, elapsed: {r.elapsed}")
+        finally:
+            pass
+
+        try:
             if r.status_code != 200:
                 logger.warning(f"Response {r.status_code} NOK: {r.text}")
                 self.error = {'http_code': r.status_code}
