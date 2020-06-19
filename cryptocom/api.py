@@ -1,8 +1,10 @@
 import logging
 import hashlib
+import hmac
 import requests
-from time import sleep
+from time import sleep, time
 from datetime import datetime
+from enum import Enum
 
 logger = logging.getLogger('cryptocom_api')
 
@@ -16,7 +18,16 @@ def current_timestamp():
 
 
 class CryptoComApi:
-    API_BASE = "https://api.crypto.com"
+    class ApiVersion(Enum):
+        V1 = "v1"
+        V2 = "v2"
+
+    _API_VERSION_ROOT_PATH = {
+        # ApiVersion.V1: "https://uat-api.3ona.co/v1/",
+        ApiVersion.V1: "https://api.crypto.com/v1/",
+        # ApiVersion.V2: "https://uat-api.3ona.co/v2/",
+        ApiVersion.V2: "https://api.crypto.com/v2/"
+    }
 
     __key = ""
     __secret = ""
@@ -24,21 +35,64 @@ class CryptoComApi:
 
     __last_api_call = 0
 
+    version = ApiVersion.V1
+
+    response_code = {
+        ApiVersion.V1: 'code',
+        ApiVersion.V2: 'code'
+    }
+    response_message = {
+        ApiVersion.V1: 'msg',
+        ApiVersion.V2: 'message'
+    }
+    response_result = {
+        ApiVersion.V1: 'data',
+        ApiVersion.V2: 'result'
+    }
+
+    response = None
+
     error = None
 
-    def __init__(self, key=None, secret=None):
+    def __init__(self, key=None, secret=None, version=ApiVersion.V2):
+        self.version = CryptoComApi.ApiVersion(version)
+        self.API_ROOT = self._API_VERSION_ROOT_PATH[self.version]
+
+        logger.debug(f"API version {version} initialized, root path is: {self.API_ROOT}")
+
         if key and secret:
             self.__key = key
             self.__secret = secret
             self.__public_only = False
 
-    def _sign(self, params):
+    def get_code(self):
+        return self.response and self.response[self.response_code[self.version]]
+
+    def get_message(self):
+        return self.response and self.response[self.response_message[self.version]]
+
+    def get_result(self):
+        return self.response and self.response[self.response_result[self.version]]
+
+    def _sign(self, params, method=None, id=None, nonce=None):
         to_sign = ""
-        for param in sorted(params.keys()):
-            to_sign += param + str(params[param])
-        to_sign += str(self.__secret)
-        h = hashlib.sha256(to_sign.encode()).hexdigest()
-        return h
+        for key in sorted(params.keys()):
+            to_sign += key + str(params[key])
+
+        if self.version == CryptoComApi.ApiVersion.V1:
+            to_sign += str(self.__secret)
+            return hashlib.sha256(to_sign.encode()).hexdigest()
+        if self.version == CryptoComApi.ApiVersion.V2:
+            to_sign = method + \
+                      (str(id) if id else "") + \
+                      self.__key + \
+                      to_sign + \
+                      str(nonce)
+            return hmac.new(
+                bytes(str(self.__secret), 'utf-8'),
+                msg=bytes(to_sign, 'utf-8'),
+                digestmod=hashlib.sha256
+            ).hexdigest()
 
     def _request(self, path, param=None, method='get'):
         ms_from_last_api_call = current_timestamp() - self.__last_api_call
@@ -52,11 +106,17 @@ class CryptoComApi:
         self.error = None
 
         if method == 'post':
-            r = requests.post(self.API_BASE + path, data=param)
+            if self.version == CryptoComApi.ApiVersion.V1:
+                r = requests.post(self.API_ROOT + path, data=param)
+            else:
+                r = requests.post(self.API_ROOT + path, json=param, headers={"Content-Type": "application/json"})
         elif method == 'delete':
-            r = requests.delete(self.API_BASE + path, data=param)
+            if self.version == CryptoComApi.ApiVersion.V1:
+                r = requests.delete(self.API_ROOT + path, data=param)
+            else:
+                r = requests.delete(self.API_ROOT + path, json=param, headers={"Content-Type": "application/json"})
         elif method == 'get':
-            r = requests.get(self.API_BASE + path, params=param)
+            r = requests.get(self.API_ROOT + path, params=param)
         else:
             return {}
 
@@ -76,15 +136,15 @@ class CryptoComApi:
                     pass
                 return {}
 
-            response = r.json()
+            self.response = r.json()
 
-            if response.get('code') != '0':
+            if int(self.get_code()) != 0:
                 # error occurred
-                logger.warning(f'Error code: {response.get("code")}')
-                logger.warning(f'Error msg: {response.get("msg")}')
-                self.error = response
+                logger.warning(f'Error code: {self.get_code()}')
+                logger.warning(f'Error msg: {self.get_message()}')
+                self.error = self.response
                 return {}
-            return response.get('data')
+            return self.get_result()
         except Exception as e:
             logger.error(f"{e}\r\nResponse text: {r.text}")
             self.error = {'exception': r.text}
@@ -95,44 +155,92 @@ class CryptoComApi:
             return {}
         if params is None:
             params = {}
-        params['api_key'] = self.__key
-        params['time'] = current_timestamp()
-        params['sign'] = self._sign(params)
+
+        if self.version == CryptoComApi.ApiVersion.V1:
+            params['api_key'] = self.__key
+            params['time'] = current_timestamp()
+            params['sign'] = self._sign(params)
+
+        if self.version == CryptoComApi.ApiVersion.V2:
+            # nonce = int(time() * 1000)
+            id = 1
+            nonce = current_timestamp()
+            sig = self._sign(params, method=path, id=id, nonce=nonce)
+            param = {
+                'params': params,
+                'sig': sig,
+                'api_key': self.__key,
+                'method': path,
+                'nonce': nonce,
+                'id': id}
+            return self._request(path, param, method='post')
 
         return self._request(path, params, method='post')
 
     ### Market Group ###
     # List all available market symbols
-    def symbols(self):
-        return self._request('/v1/symbols')
+    def symbols(self, **kwargs):
+        path = {
+            CryptoComApi.ApiVersion.V1: "symbols",
+            CryptoComApi.ApiVersion.V2: "public/get-instruments",
+        }
+        return self._request(path[self.version])
 
     # Get tickers in all available markets
-    def tickers(self):
-        return self._request('/v1/ticker')
+    def tickers(self, param=None, **kwargs):
+        path = {
+            CryptoComApi.ApiVersion.V1: "ticker",
+            CryptoComApi.ApiVersion.V2: "public/get-ticker",
+        }
+        return self._request(path[self.version], param=param)
 
     # Get ticker for a particular market
-    def ticker(self, symbol):
-        return self._request('/v1/ticker', param={'symbol': symbol})
+    def ticker(self, symbol, **kwargs):
+        param = {
+            CryptoComApi.ApiVersion.V1: {'symbol': symbol},
+            CryptoComApi.ApiVersion.V2: {'instrument_name': symbol},
+        }
+        return self.tickers(param[self.version])
 
     # Get k-line data over a specified period
-    def klines(self, symbol, period):
-        return self._request('/v1/klines', param={'symbol': symbol, 'period': period})
+    def klines(self, symbol, period, **kwargs):
+        if self.version != CryptoComApi.ApiVersion.V1:
+            return {}
+        return self._request('klines', param={'symbol': symbol, 'period': period})
 
     # Get last 200 trades in a specified market
-    def trades(self, symbol):
-        return self._request('/v1/trades', param={'symbol': symbol})
+    def trades(self, symbol, **kwargs):
+        path = {
+            CryptoComApi.ApiVersion.V1: "trades",
+            CryptoComApi.ApiVersion.V2: "public/get-trades",
+        }
+        param = {
+            CryptoComApi.ApiVersion.V1: {'symbol': symbol},
+            CryptoComApi.ApiVersion.V2: {'instrument_name': symbol},
+        }
+        return self._request(path[self.version], param[self.version])
 
     # Get latest execution price for all markets
-    def prices(self):
-        return self._request('/v1/ticker/price')
+    def prices(self, **kwargs):
+        if self.version != CryptoComApi.ApiVersion.V1:
+            return {}
+        return self._request('ticker/price')
 
     # Get the order book for a particular market, type: step0, step1, step2 (step0 is the highest accuracy)
-    def order_book(self, symbol, _type='step0'):
-        return self._request('/v1/depth', param={'symbol': symbol, 'type': _type})
+    def order_book(self, symbol, _type='step0', **kwargs):
+        path = {
+            CryptoComApi.ApiVersion.V1: "depth",
+            CryptoComApi.ApiVersion.V2: "public/get-book",
+        }
+        param = {
+            CryptoComApi.ApiVersion.V1: {'symbol': symbol, 'type': _type},
+            CryptoComApi.ApiVersion.V2: {'instrument_name': symbol, 'depth': _type},
+        }
+        return self._request(path[self.version], param[self.version])
 
     #####################################
     # User Group #
-    def balance(self):
+    def balance(self, currency=None, **kwargs):
         """
         List all account balance of user
 
@@ -160,9 +268,17 @@ class CryptoComApi:
                   ]
                 }
         """
-        return self._post('/v1/account')
+        path = {
+            CryptoComApi.ApiVersion.V1: "account",
+            CryptoComApi.ApiVersion.V2: "private/get-account-summary",
+        }
+        param = {
+            CryptoComApi.ApiVersion.V1: {},
+            CryptoComApi.ApiVersion.V2: {'currency': currency} if currency else {},
+        }
+        return self._post(path[self.version], params=param[self.version])
 
-    def create_order(self, symbol, side, _type, volume, price=None, fee_coin=None):
+    def create_order(self, symbol, side, _type, quantity=None, price=None, fee_coin=None, notional=None, **kwargs):
         """
         creates a buy or sell order on exchange
 
@@ -174,27 +290,52 @@ class CryptoComApi:
         @type _type: int
         @param _type: 1 for limit order (user sets a price), 2 for market order (best available price)
 
-        @param volume: type=1: represents the quantity of sales and purchases; \
-                       type=2: buy means the total price, Selling represents the total number.
+        @param quantity: type=1: represents the quantity of sales and purchases; \
+                         type=2: buy means the total price, Selling represents the total number.
 
+        @param notional:
         @return: { "order_id": 34343 }
         """
-        params = {'symbol': symbol, 'side': side, 'type': _type, 'volume': volume}
+        path = {
+            CryptoComApi.ApiVersion.V1: "order",
+            CryptoComApi.ApiVersion.V2: "private/create-order",
+        }
+        param = {
+            CryptoComApi.ApiVersion.V1: {'symbol': symbol, 'side': side, 'type': _type, 'volume': quantity},
+            CryptoComApi.ApiVersion.V2: {
+                'instrument_name': symbol,
+                'side': side,
+                'type': 'MARKET' if _type == 2 else 'LIMIT'
+            },
+        }
 
-        if fee_coin:
-            params['fee_is_user_exchange_coin'] = fee_coin
         if price:
-            params['price'] = price
+            param[self.version]['price'] = price
 
-        return self._post('/v1/order', params)
+        if quantity:
+            # ApiVersion.V2 !!!!
+            # For LIMIT Orders and MARKET (SELL) Orders only:
+            # Order Quantity to be Sold
+            param[CryptoComApi.ApiVersion.V2]['quantity'] = quantity
 
-    def create_limit_order(self, symbol, side, amount, price, fee_coin=None):
+        if notional:
+            # ApiVersion.V2 !!!!
+            # For MARKET (BUY) Orders only - Amount to spend
+            param[CryptoComApi.ApiVersion.V2]['notional'] = notional
+
+        if self.version == CryptoComApi.ApiVersion.V1:
+            if fee_coin:
+                param[self.version]['fee_is_user_exchange_coin'] = fee_coin
+
+        return self._post(path[self.version], params=param[self.version])
+
+    def create_limit_order(self, symbol, side, amount, price, fee_coin=None, **kwargs):
         return self.create_order(symbol, side, LIMIT_ORDER, amount, price, fee_coin)
 
-    def create_market_order(self, symbol, side, total, fee_coin=None):
+    def create_market_order(self, symbol, side, total, fee_coin=None, **kwargs):
         return self.create_order(symbol, side, MARKET_ORDER, total, None, fee_coin)
 
-    def show_order(self, symbol, order_id):
+    def show_order(self, symbol, order_id, **kwargs):
         """
         Get order detail
 
@@ -250,10 +391,17 @@ class CryptoComApi:
             }
         }
         """
-        params = {'symbol': symbol, 'order_id': order_id}
-        return self._post('/v1/showOrder', params)
+        path = {
+            CryptoComApi.ApiVersion.V1: "showOrder",
+            CryptoComApi.ApiVersion.V2: "private/get-order-detail",
+        }
+        param = {
+            CryptoComApi.ApiVersion.V1: {'symbol': symbol, 'order_id': order_id},
+            CryptoComApi.ApiVersion.V2: {'order_id': order_id}
+        }
+        return self._post(path[self.version], params=param[self.version])
 
-    def cancel_order(self, symbol, order_id):
+    def cancel_order(self, symbol, order_id, **kwargs):
         """
         Cancel an order
 
@@ -261,20 +409,34 @@ class CryptoComApi:
         @param order_id: OrderID
         @return: (null)
         """
-        params = {'symbol': symbol, 'order_id': order_id}
-        return self._post('/v1/orders/cancel', params)
+        path = {
+            CryptoComApi.ApiVersion.V1: "orders/cancel",
+            CryptoComApi.ApiVersion.V2: "private/cancel-order",
+        }
+        param = {
+            CryptoComApi.ApiVersion.V1: {'symbol': symbol, 'order_id': order_id},
+            CryptoComApi.ApiVersion.V2: {'instrument_name': symbol, 'order_id': order_id}
+        }
+        return self._post(path[self.version], params=param[self.version])
 
-    def cancel_all_orders(self, symbol):
+    def cancel_all_orders(self, symbol, **kwargs):
         """
         Cancel all orders in a particular market
 
         @param symbol: Market symbol ex. "ethbtc"
         @return: (null)
         """
-        params = {'symbol': symbol}
-        return self._post('/v1/cancelAllOrders', params)
+        path = {
+            CryptoComApi.ApiVersion.V1: "cancelAllOrders",
+            CryptoComApi.ApiVersion.V2: "private/cancel-all-orders",
+        }
+        param = {
+            CryptoComApi.ApiVersion.V1: {'symbol': symbol},
+            CryptoComApi.ApiVersion.V2: {'instrument_name': symbol}
+        }
+        return self._post(path[self.version], params=param[self.version])
 
-    def open_orders(self, symbol, page_size=None, page_number=None):
+    def open_orders(self, symbol=None, page_size=None, page_number=None, **kwargs):
         """
         List all open orders in a particular market
 
@@ -283,14 +445,23 @@ class CryptoComApi:
         @param page_number: Page number (optional)
         @return:
         """
-        params = {'symbol': symbol}
-        if page_size:
-            params['pageSize'] = page_size
-        if page_number:
-            params['page'] = page_number
-        return self._post('/v1/openOrders', params)
+        path = {
+            CryptoComApi.ApiVersion.V1: "openOrders",
+            CryptoComApi.ApiVersion.V2: "private/get-open-orders",
+        }
+        param = {
+            CryptoComApi.ApiVersion.V1: {'symbol': symbol},
+            CryptoComApi.ApiVersion.V2: ({'instrument_name': symbol} if symbol else {})
+        }
 
-    def all_orders(self, symbol, page_size=None, page_number=None, start=None, end=None):
+        if page_size:
+            param[CryptoComApi.ApiVersion.V1]['pageSize'] = page_size
+            param[CryptoComApi.ApiVersion.V2]['page_size'] = page_size
+        if page_number:
+            param[self.version]['page'] = page_number
+        return self._post(path[self.version], params=param[self.version])
+
+    def all_orders(self, symbol=None, page_size=None, page_number=None, start=None, end=None, **kwargs):
         """
         List all orders in a particular market (including executed, pending, cancelled orders)
 
@@ -301,18 +472,29 @@ class CryptoComApi:
         @param end: End time, accurate to seconds "yyyy-MM-dd mm:hh:ss" (optional)
         @return:
         """
-        params = {'symbol': symbol}
-        if page_size:
-            params['pageSize'] = page_size
-        if page_number:
-            params['page'] = page_number
-        if start:
-            params['startDate'] = start
-        if end:
-            params['endDate'] = end
-        return self._post('/v1/allOrders', params)
+        path = {
+            CryptoComApi.ApiVersion.V1: "allOrders",
+            CryptoComApi.ApiVersion.V2: "private/get-order-history",
+        }
+        param = {
+            CryptoComApi.ApiVersion.V1: {'symbol': symbol},
+            CryptoComApi.ApiVersion.V2: ({'instrument_name': symbol} if symbol else {})
+        }
 
-    def all_executed_orders(self, symbol, page_size=None, page_number=None, start=None, end=None, sort=None):
+        if page_size:
+            param[CryptoComApi.ApiVersion.V1]['pageSize'] = page_size
+            param[CryptoComApi.ApiVersion.V2]['page_size'] = page_size
+        if page_number:
+            param[self.version]['page'] = page_number
+        if start:
+            param[CryptoComApi.ApiVersion.V1]['startDate'] = start
+            param[CryptoComApi.ApiVersion.V2]['start_ts'] = start
+        if end:
+            param[CryptoComApi.ApiVersion.V1]['endDate'] = end
+            param[CryptoComApi.ApiVersion.V2]['end_ts'] = end
+        return self._post(path[self.version], params=param[self.version])
+
+    def all_executed_orders(self, symbol=None, page_size=None, page_number=None, start=None, end=None, sort=None, **kwargs):
         """
         List all executed orders
 
@@ -324,15 +506,26 @@ class CryptoComApi:
         @param sort: 1 gives reverse order
         @return:
         """
-        params = {'symbol': symbol}
+        path = {
+            CryptoComApi.ApiVersion.V1: "myTrades",
+            CryptoComApi.ApiVersion.V2: "private/get-trades",
+        }
+        param = {
+            CryptoComApi.ApiVersion.V1: {'symbol': symbol},
+            CryptoComApi.ApiVersion.V2: ({'instrument_name': symbol} if symbol else {}),
+        }
+
         if page_size:
-            params['pageSize'] = page_size
+            param[CryptoComApi.ApiVersion.V1]['pageSize'] = page_size
+            param[CryptoComApi.ApiVersion.V2]['page_size'] = page_size
         if page_number:
-            params['page'] = page_number
+            param[self.version]['page'] = page_number
         if start:
-            params['startDate'] = start
+            param[CryptoComApi.ApiVersion.V1]['startDate'] = start
+            param[CryptoComApi.ApiVersion.V2]['start_ts'] = start
         if end:
-            params['endDate'] = end
+            param[CryptoComApi.ApiVersion.V1]['endDate'] = end
+            param[CryptoComApi.ApiVersion.V2]['end_ts'] = end
         if sort:
-            params['sort'] = sort
-        return self._post('/v1/myTrades', params)
+            param[CryptoComApi.ApiVersion.V1]['sort'] = sort
+        return self._post(path[self.version], params=param[self.version])
