@@ -10,12 +10,12 @@ README = (HERE / "README.md").read_text()
 # This call to setup() does all the work
 setup(
     name="cryptocom",
-    version="0.3.0",
+    version="0.3.1",
     description="Python API wrapper for crypto.com/exchange",
     long_description=README,
     long_description_content_type="text/markdown",
     url="https://github.com/markoaurelije/crypto_com_API_python",
-    download_url="https://github.com/markoaurelije/crypto_com_API_python/dist/cryptocom-0.3.0.tar.gz",
+    download_url="https://github.com/markoaurelije/crypto_com_API_python/dist/cryptocom-0.3.1.tar.gz",
     author="Marko",
     author_email="markoaurelije@gmail.com",
     license="MIT",

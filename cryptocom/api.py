@@ -278,7 +278,7 @@ class CryptoComApi:
         }
         return self._post(path[self.version], params=param[self.version])
 
-    def create_order(self, symbol, side, _type, quantity=None, price=None, fee_coin=None, notional=None, **kwargs):
+    def create_order(self, symbol, side, _type, quantity=None, price=None, fee_coin=None, notional=None, client_oid=None, **kwargs):
         """
         creates a buy or sell order on exchange
 
@@ -323,17 +323,20 @@ class CryptoComApi:
             # For MARKET (BUY) Orders only - Amount to spend
             param[CryptoComApi.ApiVersion.V2]['notional'] = notional
 
+        if client_oid:
+            param[CryptoComApi.ApiVersion.V2]['client_oid'] = client_oid
+
         if self.version == CryptoComApi.ApiVersion.V1:
             if fee_coin:
                 param[self.version]['fee_is_user_exchange_coin'] = fee_coin
 
         return self._post(path[self.version], params=param[self.version])
 
-    def create_limit_order(self, symbol, side, amount, price, fee_coin=None, **kwargs):
-        return self.create_order(symbol, side, LIMIT_ORDER, amount, price, fee_coin)
+    def create_limit_order(self, symbol, side, amount, price, fee_coin=None, client_oid=None, **kwargs):
+        return self.create_order(symbol, side, LIMIT_ORDER, amount, price, fee_coin, client_oid, **kwargs)
 
-    def create_market_order(self, symbol, side, total, fee_coin=None, **kwargs):
-        return self.create_order(symbol, side, MARKET_ORDER, total, None, fee_coin)
+    def create_market_order(self, symbol, side, total, fee_coin=None, client_oid=None, **kwargs):
+        return self.create_order(symbol, side, MARKET_ORDER, total, None, fee_coin, client_oid, **kwargs)
 
     def show_order(self, symbol, order_id, **kwargs):
         """
