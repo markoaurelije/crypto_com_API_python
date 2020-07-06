@@ -333,10 +333,10 @@ class CryptoComApi:
         return self._post(path[self.version], params=param[self.version])
 
     def create_limit_order(self, symbol, side, amount, price, fee_coin=None, client_oid=None, **kwargs):
-        return self.create_order(symbol, side, LIMIT_ORDER, amount, price, fee_coin, client_oid, **kwargs)
+        return self.create_order(symbol, side, LIMIT_ORDER, amount, price, fee_coin=fee_coin, client_oid=client_oid)
 
     def create_market_order(self, symbol, side, total, fee_coin=None, client_oid=None, **kwargs):
-        return self.create_order(symbol, side, MARKET_ORDER, total, None, fee_coin, client_oid, **kwargs)
+        return self.create_order(symbol, side, MARKET_ORDER, total, None, fee_coin=fee_coin, client_oid=client_oid)
 
     def show_order(self, symbol, order_id, **kwargs):
         """
