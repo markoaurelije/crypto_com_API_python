@@ -9,8 +9,12 @@ from enum import Enum
 logger = logging.getLogger('cryptocom_api')
 
 RATE_LIMIT_PER_SECOND = 10
-LIMIT_ORDER = 1
-MARKET_ORDER = 2
+# LIMIT_ORDER = 1
+# MARKET_ORDER = 2
+# STOP_LOSS = 3
+# STOP_LIMIT = 4
+# TAKE_PROFIT = 5
+# TAKE_PROFIT_LIMIT = 6
 
 
 def current_timestamp():
@@ -301,11 +305,14 @@ class CryptoComApi:
             CryptoComApi.ApiVersion.V2: "private/create-order",
         }
         param = {
-            CryptoComApi.ApiVersion.V1: {'symbol': symbol, 'side': side, 'type': _type, 'volume': quantity},
+            CryptoComApi.ApiVersion.V1: {
+                'symbol': symbol, 'side': side,
+                'type': 2 if _type == 'MARKET' else 1,
+                'volume': quantity},
             CryptoComApi.ApiVersion.V2: {
                 'instrument_name': symbol,
                 'side': side,
-                'type': 'MARKET' if _type == 2 else 'LIMIT'
+                'type': _type
             },
         }
 
@@ -330,13 +337,23 @@ class CryptoComApi:
             if fee_coin:
                 param[self.version]['fee_is_user_exchange_coin'] = fee_coin
 
+        if self.version == CryptoComApi.ApiVersion.V2:
+            if 'time_in_force' in kwargs:
+                param[self.version]['time_in_force'] = kwargs['time_in_force']
+            if 'exec_inst' in kwargs:
+                param[self.version]['exec_inst'] = kwargs['exec_inst']
+            if 'trigger_price' in kwargs:
+                param[self.version]['trigger_price'] = kwargs['trigger_price']
+            if 'time_in_force' in kwargs:
+                param[self.version]['time_in_force'] = kwargs['time_in_force']
+
         return self._post(path[self.version], params=param[self.version])
 
     def create_limit_order(self, symbol, side, amount, price, fee_coin=None, client_oid=None, **kwargs):
-        return self.create_order(symbol, side, LIMIT_ORDER, amount, price, fee_coin=fee_coin, client_oid=client_oid)
+        return self.create_order(symbol, side, 'LIMIT', amount, price, fee_coin=fee_coin, client_oid=client_oid, **kwargs)
 
     def create_market_order(self, symbol, side, total, fee_coin=None, client_oid=None, **kwargs):
-        return self.create_order(symbol, side, MARKET_ORDER, total, None, fee_coin=fee_coin, client_oid=client_oid)
+        return self.create_order(symbol, side, 'MARKET', total, None, fee_coin=fee_coin, client_oid=client_oid, **kwargs)
 
     def show_order(self, symbol, order_id, **kwargs):
         """
